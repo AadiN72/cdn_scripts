@@ -2,6 +2,9 @@
   "name": "@aadin72/cdn-scripts",
   "version": "1.0.0",
   "private": true,
+  "bin": {
+    "manager": "./manager-cli.js"
+  },
   "type": "module",
   "dependencies": {
     "dotenv": "^17.2.2",
