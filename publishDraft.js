@@ -3,16 +3,28 @@
 import fs from "fs";
 import path from "path";
 import { execFileSync } from "child_process";
-import { Octokit } from "octokit";
 import sharp from "sharp";
 import dotenv from "dotenv";
 import readline from "readline/promises";
 
 const repoRoot = process.cwd();
-dotenv.config({ path: path.join(repoRoot, ".env") });
+dotenv.config({ path: path.join(repoRoot, ".env"), override: true });
 
 const args = process.argv.slice(2);
 const draftsDir = path.join(repoRoot, "drafts");
+
+function getGitHubRepositoryFromRemote() {
+  const remoteUrl = execFileSync(
+    "git",
+    ["config", "--get", "remote.origin.url"],
+    { cwd: repoRoot, encoding: "utf8" },
+  ).trim();
+  const match = remoteUrl.match(
+    /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/,
+  );
+
+  return match ? { owner: match[1], repo: match[2] } : null;
+}
 
 async function promptForDraft() {
   const files = fs
@@ -49,10 +61,11 @@ if (!/^[A-Za-z0-9._-]+$/.test(draftSlug)) {
   throw new Error("Draft name contains unsupported characters");
 }
 
+const gitHubRepository = getGitHubRepositoryFromRemote();
 const githubConfig = {
   token: process.env.GITHUB_TOKEN,
-  owner: process.env.GITHUB_OWNER,
-  repo: process.env.GITHUB_REPO,
+  owner: gitHubRepository?.owner || process.env.GITHUB_OWNER,
+  repo: gitHubRepository?.repo || process.env.GITHUB_REPO,
   branch: process.env.GITHUB_BRANCH || "main",
   mediaPath: process.env.GITHUB_MEDIA_PATH || "media",
 };
@@ -64,7 +77,6 @@ if (!githubConfig.owner || !githubConfig.repo) {
   throw new Error("GITHUB_OWNER or GITHUB_REPO not found in .env");
 }
 
-const octokit = new Octokit({ auth: githubConfig.token });
 const draftFile = path.join(draftsDir, `${draftSlug}.md`);
 const publishedFile = path.join(repoRoot, "files", `${draftSlug}.md`);
 
@@ -163,16 +175,9 @@ async function getImageUrlsFromGitHub() {
   const mediaDir = path.join(repoRoot, "media", draftSlug);
   const imageUrls = new Map();
   for (const fileName of fs.readdirSync(mediaDir)) {
-    const contentData = await octokit.rest.repos.getContent({
-      owner: githubConfig.owner,
-      repo: githubConfig.repo,
-      path: `${githubConfig.mediaPath}/${draftSlug}/${fileName}`,
-      ref: githubConfig.branch,
-    });
     imageUrls.set(
       fileName,
-      contentData.data.download_url ||
-        `https://raw.githubusercontent.com/${githubConfig.owner}/${githubConfig.repo}/${githubConfig.branch}/${githubConfig.mediaPath}/${draftSlug}/${fileName}`,
+      `https://raw.githubusercontent.com/${githubConfig.owner}/${githubConfig.repo}/${githubConfig.branch}/${githubConfig.mediaPath}/${draftSlug}/${encodeURIComponent(fileName)}`,
     );
   }
   return imageUrls;

@@ -9,7 +9,9 @@ npm install
 ```
 
 The host repository must provide `GITHUB_TOKEN`, `GITHUB_OWNER`, and
-`GITHUB_REPO` in its local `.env` file.
+`GITHUB_REPO` in its local `.env` file. These values take precedence over
+inherited environment variables so hydration targets the same repository used
+by the host workflow.
 
 The shared directory contains the complete CLI: `manager`, `generateDraft`,
 `generateRss`, and `publishDraft`. Run the manager from the CDN repository root
