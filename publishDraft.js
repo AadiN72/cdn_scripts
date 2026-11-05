@@ -132,7 +132,22 @@ async function moveImagesIntoMedia(content) {
     imageNameMap.set(entry.name, outputName);
   }
 
-  fs.rmSync(sourceDir, { recursive: true, force: true });
+  try {
+    fs.rmSync(sourceDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 200,
+    });
+  } catch (error) {
+    if (error.code !== "EPERM") {
+      throw error;
+    }
+
+    console.warn(
+      `Warning: Converted images, but could not remove source directory: ${sourceDir}`,
+    );
+  }
   execFileSync("git", ["add", "--", `media/${draftSlug}`], {
     cwd: repoRoot,
     stdio: "inherit",
