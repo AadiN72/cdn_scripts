@@ -213,9 +213,30 @@ function hydrateMarkdown(content, imageUrls, imageNameMap) {
 }
 
 function finalizeGitPublish() {
-  const paths = [`drafts/${draftSlug}.md`, `files/${draftSlug}.md`];
+  const candidatePaths = [`drafts/${draftSlug}.md`, `files/${draftSlug}.md`];
   if (fs.existsSync(path.join(repoRoot, "rss.xml"))) {
-    paths.push("rss.xml");
+    candidatePaths.push("rss.xml");
+  }
+  const paths = candidatePaths.filter((relativePath) => {
+    if (fs.existsSync(path.join(repoRoot, relativePath))) {
+      return true;
+    }
+
+    try {
+      execFileSync("git", ["ls-files", "--error-unmatch", "--", relativePath], {
+        cwd: repoRoot,
+        stdio: "ignore",
+      });
+      return true;
+    } catch (error) {
+      if (error.status !== 1) {
+        throw error;
+      }
+      return false;
+    }
+  });
+  if (paths.length === 0) {
+    return;
   }
   execFileSync("git", ["add", "-A", "--", ...paths], {
     cwd: repoRoot,
