@@ -118,7 +118,7 @@ function resolveImageSourceDir(content) {
 async function moveImagesIntoMedia(content) {
   const sourceDir = resolveImageSourceDir(content);
   if (!sourceDir) {
-    return { files: [], imageNameMap: new Map() };
+    return { files: [], imageNameMap: new Map(), sourceDir: null };
   }
 
   const targetDir = path.join(repoRoot, "media", draftSlug);
@@ -144,22 +144,6 @@ async function moveImagesIntoMedia(content) {
     imageNameMap.set(entry.name, outputName);
   }
 
-  try {
-    fs.rmSync(sourceDir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 200,
-    });
-  } catch (error) {
-    if (error.code !== "EPERM") {
-      throw error;
-    }
-
-    console.warn(
-      `Warning: Converted images, but could not remove source directory: ${sourceDir}`,
-    );
-  }
   execFileSync("git", ["add", "--", `media/${draftSlug}`], {
     cwd: repoRoot,
     stdio: "inherit",
@@ -168,7 +152,25 @@ async function moveImagesIntoMedia(content) {
   return {
     files: fs.readdirSync(targetDir),
     imageNameMap,
+    sourceDir,
   };
+}
+
+function removePublishedDraftImages(sourceDir) {
+  if (!sourceDir) {
+    return;
+  }
+
+  fs.rmSync(sourceDir, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 500,
+  });
+
+  if (fs.existsSync(sourceDir)) {
+    throw new Error(`Could not remove published image directory: ${sourceDir}`);
+  }
 }
 
 async function getImageUrlsFromGitHub() {
@@ -271,7 +273,7 @@ async function publishDraft() {
 
   console.log(`\nPublishing draft: ${draftSlug}\n`);
   const content = fs.readFileSync(draftFile, "utf8");
-  const { files, imageNameMap } = await moveImagesIntoMedia(content);
+  const { files, imageNameMap, sourceDir } = await moveImagesIntoMedia(content);
   if (files.length > 0) {
     commitMediaBundle();
   }
@@ -293,6 +295,7 @@ async function publishDraft() {
 
   fs.rmSync(draftFile);
   finalizeGitPublish();
+  removePublishedDraftImages(sourceDir);
   console.log(`\nSuccessfully published ${draftSlug}\n`);
 }
 
